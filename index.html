@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema Autónomo de Generación de Agua | ESP32 | Universidad</title>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800&family=Open+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        /* =========================================
+           PALETA DE DÍA Y NOCHE 
+           ========================================= */
+        :root { 
+            --primary: #314284;   
+            --secondary: #1f3189; 
+            --accent: #249cdd; 
+            --success: #4c874d;   
+            --danger: #c21226;    
+            --warning: #f59e0b; 
+            --bg: #f8fafc; 
+            --card-bg: #ffffff;
+            --border: #e2e8f0; 
+            --text-main: #334155;
+            --text-muted: #64748b;
+            --input-bg: #f8fafc;
+        } 
+
+        body.dark-mode {
+            --bg: #0f172a;         
+            --card-bg: #1e293b;    
+            --border: #334155;     
+            --text-main: #f8fafc;  
+            --text-muted: #94a3b8; 
+            --input-bg: #0f172a;   
+            --primary: #5c73d6;    
+            --secondary: #3b509e;
+        }
+
+        body, .card, .topbar, .sidebar, .widget-box { 
+            transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease; 
+        }
+
+        body { 
+            font-family: 'Open Sans', sans-serif; 
+            background: var(--bg); 
+            margin: 0; 
+            display: flex; 
+            flex-direction: column; 
+            height: 100vh; 
+            color: var(--text-main); 
+        }
+        
+        /* TOPBAR AJUSTADA PARA LOGO GRANDE */
+        .topbar { 
+            background: var(--card-bg); 
+            height: 85px; /* Aumentado de 70px a 85px */
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            padding: 0 30px; 
+            border-bottom: 1px solid var(--border); 
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05); 
+            z-index: 10; 
+        }
+        .topbar-brand { display: flex; align-items: center; height: 100%; gap: 15px; }
+        .topbar-title { 
+            font-family: 'Montserrat', sans-serif; 
+            font-weight: 700; 
+            color: var(--accent); 
+            font-size: 16px; 
+            padding-left: 15px;
+            border-left: 1px solid var(--border); /* Divisor entre logo y texto */
+        }
+        .topbar-actions { display: flex; align-items: center; gap: 15px; }
+
+        /* LOGOS GRANDES */
+        .uni-logo {
+            height: 65px; /* Aumentado de 45px a 65px */
+            width: auto;
+            object-fit: contain;
+            transition: all 0.3s ease;
+        }
+
+        .dark-logo { display: none; }
+        .light-logo { display: block; }
+        body.dark-mode .dark-logo { display: block; }
+        body.dark-mode .light-logo { display: none; }
+
+        .btn-theme-toggle { 
+            background: var(--input-bg); border: 1px solid var(--border); cursor: pointer; 
+            color: var(--text-muted); font-size: 13px; font-weight: 600; padding: 8px 15px; 
+            border-radius: 6px; transition: all 0.2s; display: flex; align-items: center; gap: 8px; font-family: inherit; 
+        }
+        .btn-theme-toggle:hover { color: var(--primary); border-color: var(--primary); }
+
+        /* LAYOUT PRINCIPAL */
+        .main-layout { display: flex; flex: 1; overflow: hidden; }
+        
+        /* SIDEBAR */
+        .sidebar { width: 280px; background: var(--card-bg); border-right: 1px solid var(--border); display: flex; flex-direction: column; z-index: 5; }
+        .sidebar.collapsed { width: 0; border-right: none; overflow: hidden; }
+        .sidebar-title { padding: 25px 20px 10px; font-family: 'Montserrat', sans-serif; font-weight: 800; font-size: 12px; text-transform: uppercase; color: #94a3b8; letter-spacing: 0.5px; }
+        .menu-item { padding: 12px 20px; margin: 4px 10px; border-radius: 8px; color: var(--text-muted); font-weight: 600; font-size: 14px; cursor: pointer; transition: 0.2s; display: flex; align-items: center; gap: 12px; }
+        .menu-item:hover { background: var(--input-bg); color: var(--primary); }
+        .menu-item.active { background: var(--input-bg); color: var(--primary); border-left: 3px solid var(--primary); }
+        .menu-item.active i { color: var(--accent); }
+        
+        .content { flex: 1; padding: 30px; overflow-y: auto; }
+        
+        /* CARDS */
+        .card { background: var(--card-bg); border-radius: 12px; padding: 25px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05), 0 2px 4px -1px rgba(0,0,0,0.03); margin-bottom: 25px; border: 1px solid var(--border); }
+        .card-accent { border-top: 4px solid var(--accent); } 
+        .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 1px solid var(--border); }
+        .card-title { font-family: 'Montserrat', sans-serif; font-weight: 700; color: var(--primary); font-size: 20px; margin: 0; }
+
+        /* WIDGETS */
+        .sensors-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 20px;
+        }
+        .widget-box {
+            background: var(--input-bg); border: 1px solid var(--border); border-radius: 16px;
+            padding: 25px 20px; display: flex; flex-direction: column; align-items: center; justify-content: center;
+            position: relative; box-shadow: inset 0 2px 4px rgba(0,0,0,0.02);
+        }
+        .widget-title { color: var(--accent); font-family: 'Montserrat', sans-serif; font-weight: 700; font-size: 15px; margin-bottom: 5px; }
+        .widget-value { color: var(--text-main); font-size: 28px; font-weight: 800; font-family: 'Montserrat', sans-serif; margin-bottom: 20px; }
+
+        .v-bar-container {
+            width: 50px; height: 120px; background: var(--card-bg); border: 2px solid var(--border);
+            border-radius: 25px; position: relative; overflow: hidden; box-shadow: inset 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .shape-drop { border-radius: 50% 50% 40% 40% / 60% 60% 40% 40%; width: 70px; height: 90px; }
+        .shape-tank { border-radius: 8px; width: 60px; height: 100px; }
+        .shape-soil { border-radius: 12px; width: 70px; height: 80px; }
+
+        .v-bar-fill { position: absolute; bottom: 0; left: 0; width: 100%; transition: height 1s ease-in-out; }
+        .fill-temp { background: linear-gradient(0deg, #f59e0b, #c21226); }
+        .fill-hum { background: linear-gradient(0deg, #249cdd, #5c73d6); }
+        .fill-soil { background: linear-gradient(0deg, #8B4513, #f59e0b, #4c874d); }
+        .fill-ph { background: linear-gradient(0deg, #249cdd, #4ceb34); }
+
+        .control-panel { display: flex; gap: 15px; flex-wrap: wrap; }
+        .btn-control {
+            flex: 1; min-width: 150px; padding: 15px; border-radius: 10px; border: 1px solid var(--border);
+            background: var(--card-bg); color: var(--text-main); font-weight: 600; cursor: pointer;
+            transition: all 0.2s; display: flex; flex-direction: column; align-items: center; gap: 10px;
+        }
+        .btn-control.active { background: rgba(76, 135, 77, 0.1); border-color: var(--success); color: var(--success); }
+
+        .status-badge {
+            padding: 8px 15px; border-radius: 20px; font-size: 12px; font-weight: 700;
+            background: rgba(76, 135, 77, 0.15); color: var(--success); display: flex; align-items: center; gap: 8px;
+        }
+        .status-badge.dot::before {
+            content: ''; display: inline-block; width: 10px; height: 10px;
+            background-color: var(--success); border-radius: 50%; animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(76, 135, 77, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(76, 135, 77, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(76, 135, 77, 0); }
+        }
+
+        /* =========================================
+           ADAPTACIÓN PARA CELULARES (RESPONSIVE)
+           ========================================= */
+        @media (max-width: 768px) {
+            .topbar { height: 75px; padding: 0 15px; }
+            .uni-logo { height: 50px; } /* Logo un poco más pequeño en móvil pero aún visible */
+            .topbar-title { display: none; } /* Ocultamos título en móvil para dar espacio al logo */
+            .main-layout { flex-direction: column; }
+            .sidebar { position: absolute; height: calc(100vh - 75px); width: 100%; left: -100%; z-index: 20; }
+            .sidebar:not(.collapsed) { left: 0; }
+            .content { padding: 15px; }
+            .sensors-grid { grid-template-columns: 1fr 1fr; gap: 10px; }
+            .btn-theme-toggle span { display: none; }
+        }
+    </style>
+</head>
+<body class="dark-mode"> 
+    <div class="topbar">
+        <div class="topbar-brand">
+            <button onclick="toggleSidebar()" style="background: transparent; border: none; color: var(--text-muted); font-size: 20px; cursor: pointer;">
+                <i class="fa-solid fa-bars"></i>
+            </button>
+            
+            <img src="https://i.imgur.com/Hf0xeqk.png" alt="Logo Universidad" class="uni-logo light-logo">
+            <img src="https://i.imgur.com/ZJmHaDS.png" alt="Logo Universidad" class="uni-logo dark-logo">
+
+            <div class="topbar-title">Sistema de Generación de Agua</div>
+        </div>
+        <div class="topbar-actions">
+            <div id="conexionEstado" class="status-badge dot">ESP32 Conectado</div>
+            <button id="btnDarkMode" class="btn-theme-toggle" onclick="toggleDarkMode()">
+                <i class="fa-solid fa-sun" style="color: #f59e0b;"></i> <span>Modo Claro</span>
+            </button>
+        </div>
+    </div>
+
+    <div class="main-layout">
+        <div class="sidebar collapsed"> 
+            <div class="sidebar-title">Módulos del Sistema</div>
+            <div class="menu-item active" onclick="toggleSidebar()"><i class="fa-solid fa-chart-line"></i> Centro de Comando</div>
+            <div class="menu-item" onclick="moduloEnDesarrollo('Historial de Producción')"><i class="fa-solid fa-glass-water"></i> Historial de Producción</div>
+            <div class="menu-item" onclick="moduloEnDesarrollo('Biofiltro (Plantas)')"><i class="fa-solid fa-leaf"></i> Biofiltro (Plantas)</div>
+            
+            <div class="menu-divider" style="height: 1px; background: var(--border); margin: 15px 20px;"></div>
+            <div class="sidebar-title">Configuración</div>
+            <div class="menu-item" onclick="moduloEnDesarrollo('Parámetros ESP32')"><i class="fa-solid fa-microchip"></i> Parámetros ESP32</div>
+            <div class="menu-item" onclick="moduloEnDesarrollo('Control Celdas Peltier')"><i class="fa-solid fa-fan"></i> Control Celdas Peltier</div>
+        </div>
+
+        <div class="content">
+            <div class="card card-accent">
+                <div class="card-header" style="flex-wrap: wrap; gap: 10px;">
+                    <h2 class="card-title">Monitoreo en Tiempo Real</h2>
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <span style="font-size: 13px; color: var(--text-muted);"><i class="fa-solid fa-clock"></i> <span id="hora-act">Ahora</span></span>
+                        <button onclick="probarVoz()" style="background: var(--accent); color: white; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 12px;">
+                            <i class="fa-solid fa-volume-high"></i> Voz IA
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="sensors-grid">
+                    <div class="widget-box">
+                        <div class="widget-title">Temperatura Ambientar</div>
+                        <div class="widget-value" id="val-temp">25 °C</div>
+                        <div class="v-bar-container">
+                            <div class="v-bar-fill fill-temp" id="bar-temp" style="height: 60%;"></div>
+                        </div>
+                    </div>
+                    <div class="widget-box">
+                        <div class="widget-title">Humedad Ambientar</div>
+                        <div class="widget-value" id="val-hum">60%</div>
+                        <div class="v-bar-container shape-drop">
+                            <div class="v-bar-fill fill-hum" id="bar-hum" style="height: 60%;"></div>
+                        </div>
+                    </div>
+                    <div class="widget-box">
+                        <div class="widget-title" style="color: var(--success);">Humedad Suelo</div>
+                        <div class="widget-icon"><i class="fa-solid fa-leaf" style="color: var(--success);"></i></div>
+                        <div class="widget-value" id="val-soil">70%</div>
+                        <div class="v-bar-container shape-soil">
+                            <div class="v-bar-fill fill-soil" id="bar-soil" style="height: 70%;"></div>
+                        </div>
+                    </div>
+                    <div class="widget-box">
+                        <div class="widget-title">pH del Agua</div>
+                        <div class="widget-value" id="val-ph">6.8</div>
+                        <div class="v-bar-container shape-tank">
+                            <div class="v-bar-fill fill-ph" id="bar-ph" style="height: 48%;"></div> </div>
+                        <div style="font-size: 11px; color: var(--text-muted); margin-top: 10px;">Agua Potable</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card" style="border-top: 4px solid var(--primary);">
+                <div class="card-header"><h2 class="card-title">Control de Actuadores</h2></div>
+                <div class="control-panel">
+                    <button class="btn-control active" id="btn-peltier" onclick="toggleActuador('peltier')"><i class="fa-solid fa-snowflake"></i><span>Celdas Peltier (ON)</span></button>
+                    <button class="btn-control active" id="btn-fan" onclick="toggleActuador('fan')"><i class="fa-solid fa-fan fa-spin"></i><span>Ventilador Extractor (ON)</span></button>
+                    <button class="btn-control" id="btn-pump" onclick="toggleActuador('pump')"><i class="fa-solid fa-faucet-drip"></i><span>Bomba de Drenaje (OFF)</span></button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function toggleDarkMode() {
+            document.body.classList.toggle('dark-mode');
+            const btn = document.getElementById('btnDarkMode');
+            btn.innerHTML = document.body.classList.contains('dark-mode') ? 
+                '<i class="fa-solid fa-sun" style="color: #f59e0b;"></i> <span>Modo Claro</span>' : 
+                '<i class="fa-solid fa-moon"></i> <span>Modo Oscuro</span>';
+        }
+
+        function toggleSidebar() { document.querySelector('.sidebar').classList.toggle('collapsed'); }
+
+        function moduloEnDesarrollo(nombreModulo) {
+            alert("El módulo '" + nombreModulo + "' está planificado para la Fase 2 de escalado.");
+        }
+
+        function toggleActuador(id) {
+            const btn = document.getElementById(`btn-${id}`);
+            const span = btn.querySelector('span');
+            const icon = btn.querySelector('i');
+            btn.classList.toggle('active');
+            if (btn.classList.contains('active')) {
+                span.innerText = span.innerText.replace('(OFF)', '(ON)');
+                if(id === 'fan') icon.classList.add('fa-spin');
+            } else {
+                span.innerText = span.innerText.replace('(ON)', '(OFF)');
+                if(id === 'fan') icon.classList.remove('fa-spin');
+            }
+        }
+
+        function actualizarSensoresESP32(temp, hum, soil, ph) {
+            document.getElementById('val-temp').innerText = temp + " °C";
+            document.getElementById('val-hum').innerText = hum + "%";
+            document.getElementById('val-soil').innerText = soil + "%";
+            document.getElementById('val-ph').innerText = ph;
+            document.getElementById('bar-temp').style.height = (temp * 2) + "%"; 
+            document.getElementById('bar-hum').style.height = hum + "%";
+            document.getElementById('bar-soil').style.height = soil + "%";
+            document.getElementById('bar-ph').style.height = ((ph / 14) * 100) + "%";
+            document.getElementById('hora-act').innerText = new Date().toLocaleTimeString();
+        }
+
+        setInterval(() => {
+            let mockTemp = (22 + Math.random() * 5).toFixed(1);
+            let mockHum = Math.floor(55 + Math.random() * 15);
+            let mockSoil = Math.floor(68 + Math.random() * 8);
+            let mockPh = (6.7 + Math.random() * 0.4).toFixed(1);
+            actualizarSensoresESP32(mockTemp, mockHum, mockSoil, mockPh);
+        }, 5000);
+
+        function hablarIA(mensaje) {
+            if (!('speechSynthesis' in window)) return;
+            window.speechSynthesis.cancel();
+            let voz = new SpeechSynthesisUtterance(mensaje);
+            voz.lang = 'es-ES';
+            voz.rate = 1.05;
+            window.speechSynthesis.speak(voz);
+        }
+
+        function probarVoz() {
+            const temp = document.getElementById('val-temp').innerText;
+            const hum = document.getElementById('val-hum').innerText;
+            const ph = document.getElementById('val-ph').innerText;
+            hablarIA(`Sistema estable. Temperatura ambiental ${temp}, humedad ${hum}, nivel de p h ${ph}.`);
+        }
+    </script>
+</body>
+</html>
